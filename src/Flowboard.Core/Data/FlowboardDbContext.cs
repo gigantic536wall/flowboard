@@ -8,6 +8,12 @@ namespace Flowboard.Core.Data;
 public sealed class FlowboardDbContext(DbContextOptions<FlowboardDbContext> options)
     : IdentityDbContext<ApplicationUser>(options), IDataProtectionKeyContext
 {
+    /// <summary>
+    /// All tables live in their own schema, so Flowboard can share a PostgreSQL database with other apps
+    /// (the free demo shares one Neon database with another project).
+    /// </summary>
+    public const string Schema = "flowboard";
+
     /// <summary>Cookie encryption keys, kept in the database so sign-ins survive restarts and redeploys.</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
@@ -21,6 +27,7 @@ public sealed class FlowboardDbContext(DbContextOptions<FlowboardDbContext> opti
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.HasDefaultSchema(Schema);
 
         builder.Entity<ApplicationUser>(e => e.Property(u => u.DisplayName).HasMaxLength(100));
 

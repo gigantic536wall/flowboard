@@ -721,7 +721,7 @@ public sealed class BoardService(IDbContextFactory<FlowboardDbContext> factory, 
     private static async Task SaveInColumnAsync(FlowboardDbContext db, Guid columnId, Card card, Func<Task<string>> rank, CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
-        await db.Database.ExecuteSqlAsync($"""SELECT 1 FROM "Columns" WHERE "Id" = {columnId} FOR UPDATE""", ct);
+        await db.Database.ExecuteSqlAsync($"""SELECT 1 FROM "flowboard"."Columns" WHERE "Id" = {columnId} FOR UPDATE""", ct);
         card.Rank = await rank();
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);

@@ -84,3 +84,4 @@ docker run -p 8080:8080 -e ConnectionStrings__Default="postgres://user:password@
 ```
 
 [`render.yaml`](render.yaml) deploys the image to Render (Frankfurt); the database is a free Neon PostgreSQL instance.
+All tables live in their own `flowboard` schema (migrations history included), so the app can share a database with other projects.

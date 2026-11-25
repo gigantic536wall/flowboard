@@ -44,7 +44,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
     {
         await using var db = await Factory.CreateDbContextAsync();
         await db.Database.ExecuteSqlRawAsync(
-            """TRUNCATE "Activities", "Cards", "Columns", "Boards", "Memberships", "Workspaces", "AspNetUsers" CASCADE""");
+            """TRUNCATE flowboard."Activities", flowboard."Cards", flowboard."Columns", flowboard."Boards", flowboard."Memberships", flowboard."Workspaces", flowboard."AspNetUsers" CASCADE""");
     }
 
     Task IAsyncLifetime.DisposeAsync() => _services.DisposeAsync().AsTask();

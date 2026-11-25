@@ -17,7 +17,9 @@ public static class ServiceCollectionExtensions
     public static IdentityBuilder AddFlowboardCore(this IServiceCollection services, string connectionString)
     {
         // A factory: Blazor Server components live long, so every operation gets its own short-lived context.
-        services.AddDbContextFactory<FlowboardDbContext>(options => options.UseNpgsql(ConnectionStrings.Normalize(connectionString)));
+        services.AddDbContextFactory<FlowboardDbContext>(options => options.UseNpgsql(
+            ConnectionStrings.Normalize(connectionString),
+            npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", FlowboardDbContext.Schema)));
         services.TryAddSingleton<IBoardEvents, NoBoardEvents>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<BoardService>();

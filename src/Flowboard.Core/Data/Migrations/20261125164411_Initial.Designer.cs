@@ -12,14 +12,15 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Flowboard.Core.Data.Migrations
 {
     [DbContext(typeof(FlowboardDbContext))]
-    [Migration("20261125161209_InvitesAndDemo")]
-    partial class InvitesAndDemo
+    [Migration("20261125164411_Initial")]
+    partial class Initial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
+                .HasDefaultSchema("flowboard")
                 .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
@@ -60,7 +61,7 @@ namespace Flowboard.Core.Data.Migrations
 
                     b.HasIndex("BoardId", "Id");
 
-                    b.ToTable("Activities");
+                    b.ToTable("Activities", "flowboard");
                 });
 
             modelBuilder.Entity("Flowboard.Core.Domain.ApplicationUser", b =>
@@ -136,7 +137,7 @@ namespace Flowboard.Core.Data.Migrations
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
 
-                    b.ToTable("AspNetUsers", (string)null);
+                    b.ToTable("AspNetUsers", "flowboard");
                 });
 
             modelBuilder.Entity("Flowboard.Core.Domain.Board", b =>
@@ -160,7 +161,7 @@ namespace Flowboard.Core.Data.Migrations
 
                     b.HasIndex("WorkspaceId");
 
-                    b.ToTable("Boards");
+                    b.ToTable("Boards", "flowboard");
                 });
 
             modelBuilder.Entity("Flowboard.Core.Domain.Card", b =>
@@ -219,7 +220,7 @@ namespace Flowboard.Core.Data.Migrations
                     b.HasIndex("ColumnId", "Rank")
                         .IsUnique();
 
-                    b.ToTable("Cards");
+                    b.ToTable("Cards", "flowboard");
                 });
 
             modelBuilder.Entity("Flowboard.Core.Domain.Column", b =>
@@ -250,7 +251,7 @@ namespace Flowboard.Core.Data.Migrations
                     b.HasIndex("BoardId", "Rank")
                         .IsUnique();
 
-                    b.ToTable("Columns", t =>
+                    b.ToTable("Columns", "flowboard", t =>
                         {
                             t.HasCheckConstraint("ck_columns_wip", "\"WipLimit\" IS NULL OR \"WipLimit\" > 0");
                         });
@@ -271,7 +272,7 @@ namespace Flowboard.Core.Data.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Memberships");
+                    b.ToTable("Memberships", "flowboard");
                 });
 
             modelBuilder.Entity("Flowboard.Core.Domain.Workspace", b =>
@@ -300,7 +301,26 @@ namespace Flowboard.Core.Data.Migrations
                     b.HasIndex("InviteCode")
                         .IsUnique();
 
-                    b.ToTable("Workspaces");
+                    b.ToTable("Workspaces", "flowboard");
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("FriendlyName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Xml")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DataProtectionKeys", "flowboard");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -326,7 +346,7 @@ namespace Flowboard.Core.Data.Migrations
                         .IsUnique()
                         .HasDatabaseName("RoleNameIndex");
 
-                    b.ToTable("AspNetRoles", (string)null);
+                    b.ToTable("AspNetRoles", "flowboard");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -351,7 +371,7 @@ namespace Flowboard.Core.Data.Migrations
 
                     b.HasIndex("RoleId");
 
-                    b.ToTable("AspNetRoleClaims", (string)null);
+                    b.ToTable("AspNetRoleClaims", "flowboard");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<string>", b =>
@@ -376,7 +396,7 @@ namespace Flowboard.Core.Data.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("AspNetUserClaims", (string)null);
+                    b.ToTable("AspNetUserClaims", "flowboard");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<string>", b =>
@@ -400,7 +420,7 @@ namespace Flowboard.Core.Data.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("AspNetUserLogins", (string)null);
+                    b.ToTable("AspNetUserLogins", "flowboard");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserPasskey<string>", b =>
@@ -417,7 +437,7 @@ namespace Flowboard.Core.Data.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("AspNetUserPasskeys", (string)null);
+                    b.ToTable("AspNetUserPasskeys", "flowboard");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<string>", b =>
@@ -432,7 +452,7 @@ namespace Flowboard.Core.Data.Migrations
 
                     b.HasIndex("RoleId");
 
-                    b.ToTable("AspNetUserRoles", (string)null);
+                    b.ToTable("AspNetUserRoles", "flowboard");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
@@ -453,7 +473,7 @@ namespace Flowboard.Core.Data.Migrations
 
                     b.HasKey("UserId", "LoginProvider", "Name");
 
-                    b.ToTable("AspNetUserTokens", (string)null);
+                    b.ToTable("AspNetUserTokens", "flowboard");
                 });
 
             modelBuilder.Entity("Flowboard.Core.Domain.Activity", b =>
@@ -596,7 +616,7 @@ namespace Flowboard.Core.Data.Migrations
 
                             b1.HasKey("IdentityUserPasskeyCredentialId");
 
-                            b1.ToTable("AspNetUserPasskeys");
+                            b1.ToTable("AspNetUserPasskeys", "flowboard");
 
                             b1
                                 .ToJson("Data")
