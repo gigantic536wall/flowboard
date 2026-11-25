@@ -483,4 +483,3 @@ $RECYCLE.BIN/
 
 # The end-to-end test project (the *.e2e pattern above is meant for Visual Studio test files)
 !tests/Flowboard.E2E/
-!tests/Flowboard.E2E/**
