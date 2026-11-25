@@ -7,6 +7,7 @@ using Flowboard.Web.Components;
 using Flowboard.Web.Components.Account;
 using Flowboard.Web.Realtime;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -38,6 +39,7 @@ builder.Services.AddFlowboardCore(connectionString)
     .AddDefaultTokenProviders()
     .AddClaimsPrincipalFactory<FlowboardClaimsFactory>();
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
+builder.Services.AddDataProtection().PersistKeysToDbContext<FlowboardDbContext>().SetApplicationName("Flowboard");
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 builder.Services.AddDemo();
 

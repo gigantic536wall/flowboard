@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: flowboard_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      ConnectionStrings__Test: Host=localhost;Database=flowboard_test;Username=postgres;Password=postgres
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet build -c Release
+      - run: dotnet test tests/Flowboard.Tests -c Release --no-build
+
+  # Builds the production image, starts it against PostgreSQL and runs the two-browser
+  # Playwright test against it: two guests must see each other's changes live.
+  e2e:
+    needs: test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: flowboard
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t flowboard .
+      - name: Start the app
+        run: |
+          docker run -d --name app --network host \
+            -e ConnectionStrings__Default="postgres://postgres:postgres@localhost:5432/flowboard" \
+            flowboard
+          for i in $(seq 1 60); do curl -fs localhost:8080/healthz && break; sleep 1; done
+          curl -fsS -o /dev/null localhost:8080/
+          echo "image size: $(docker image inspect flowboard --format '{{.Size}}' | numfmt --to=iec)"
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet build tests/Flowboard.E2E -c Release
+      - run: pwsh tests/Flowboard.E2E/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+      - name: Two-browser test
+        env:
+          FLOWBOARD_URL: http://localhost:8080
+          E2E_FRAMES_DIR: ${{ github.workspace }}/e2e-frames
+        run: dotnet test tests/Flowboard.E2E -c Release --no-build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: e2e-frames/
+      - if: failure()
+        run: docker logs app

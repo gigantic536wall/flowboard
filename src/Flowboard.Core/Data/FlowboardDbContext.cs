@@ -1,11 +1,16 @@
 using Flowboard.Core.Domain;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Flowboard.Core.Data;
 
-public sealed class FlowboardDbContext(DbContextOptions<FlowboardDbContext> options) : IdentityDbContext<ApplicationUser>(options)
+public sealed class FlowboardDbContext(DbContextOptions<FlowboardDbContext> options)
+    : IdentityDbContext<ApplicationUser>(options), IDataProtectionKeyContext
 {
+    /// <summary>Cookie encryption keys, kept in the database so sign-ins survive restarts and redeploys.</summary>
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+
     public DbSet<Workspace> Workspaces => Set<Workspace>();
     public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<Board> Boards => Set<Board>();
