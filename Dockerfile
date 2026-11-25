@@ -9,7 +9,9 @@ COPY src/Flowboard.Web/Flowboard.Web.csproj src/Flowboard.Web/
 RUN dotnet restore src/Flowboard.Web/Flowboard.Web.csproj
 
 COPY src/ src/
-RUN dotnet publish src/Flowboard.Web/Flowboard.Web.csproj -c Release -o /app --no-restore /p:UseAppHost=false
+# No --no-restore here: the SDK adds Blazor's framework assets (_framework/blazor.web.js) only when it
+# restores with the .razor files present, so the restore above just warms the package cache.
+RUN dotnet publish src/Flowboard.Web/Flowboard.Web.csproj -c Release -o /app /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
