@@ -104,13 +104,32 @@ public sealed class LiveCollaborationTests : IAsyncLifetime
     private async Task<IPage> NewPageAsync()
     {
         var context = await browser!.NewContextAsync(new() { ViewportSize = new() { Width = 1280, Height = 760 } });
-        return await context.NewPageAsync();
+        var page = await context.NewPageAsync();
+        // Browser errors end up in the test log, which makes CI failures readable.
+        page.Console += (_, msg) => { if (msg.Type is "error" or "warning") { Console.WriteLine($"[browser {msg.Type}] {msg.Text}"); } };
+        page.PageError += (_, error) => Console.WriteLine($"[page error] {error}");
+        return page;
     }
 
     /// <summary>Waits until Blazor has connected the page, so clicks reach the server.</summary>
-    private static async Task Interactive(IPage page) =>
-        await page.WaitForFunctionAsync("() => window.Blazor !== undefined && document.querySelector('.presence .avatar') !== null",
-            null, new() { Timeout = Timeout });
+    private async Task Interactive(IPage page)
+    {
+        try
+        {
+            await page.WaitForFunctionAsync("() => window.Blazor !== undefined && document.querySelector('.presence .avatar') !== null",
+                null, new() { Timeout = Timeout });
+        }
+        catch (TimeoutException)
+        {
+            if (!string.IsNullOrEmpty(FramesDir))
+            {
+                Directory.CreateDirectory(FramesDir);
+                await page.ScreenshotAsync(new() { Path = Path.Combine(FramesDir, $"failure{++frame:D2}.png") });
+            }
+
+            throw;
+        }
+    }
 
     private async Task SnapAsync(IPage left, IPage right)
     {

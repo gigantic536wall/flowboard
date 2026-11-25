@@ -58,7 +58,10 @@ jobs:
             -e ConnectionStrings__Default="postgres://postgres:postgres@localhost:5432/flowboard" \
             flowboard
           for i in $(seq 1 60); do curl -fs localhost:8080/healthz && break; sleep 1; done
+          curl -fsS localhost:8080/healthz
           curl -fsS -o /dev/null localhost:8080/
+          js=$(curl -fsS localhost:8080/ | grep -oE '_framework/blazor.web[^"]*.js' | head -1)
+          echo "blazor script: $js -> $(curl -s -o /dev/null -w '%{http_code}' "localhost:8080/$js")"
           echo "image size: $(docker image inspect flowboard --format '{{.Size}}' | numfmt --to=iec)"
       - uses: actions/setup-dotnet@v4
         with:
@@ -67,9 +70,10 @@ jobs:
       - run: pwsh tests/Flowboard.E2E/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
       - name: Two-browser test
         env:
+          DOTNET_CLI_UI_LANGUAGE: en
           FLOWBOARD_URL: http://localhost:8080
           E2E_FRAMES_DIR: ${{ github.workspace }}/e2e-frames
-        run: dotnet test tests/Flowboard.E2E -c Release --no-build
+        run: dotnet test tests/Flowboard.E2E -c Release --no-build --logger "console;verbosity=detailed"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
