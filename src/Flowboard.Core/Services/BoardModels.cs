@@ -18,7 +18,7 @@ public sealed record MemberView(string UserId, string Name, string? Email, Role 
 /// <summary>Everything a client needs to draw a board, in display order.</summary>
 public sealed record BoardView(
     Guid Id, Guid WorkspaceId, string Name, string WorkspaceName, Role MyRole, IReadOnlyList<ColumnView> Columns,
-    IReadOnlyList<MemberView> Members);
+    IReadOnlyList<MemberView> Members, string? DemoInviteCode = null);
 
 public sealed record BoardSummary(Guid Id, string Name, Guid WorkspaceId, string WorkspaceName, Role MyRole, int CardCount);
 

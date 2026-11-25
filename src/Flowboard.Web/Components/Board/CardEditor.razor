@@ -1,0 +1,165 @@
+@inject BoardService Boards
+
+<div class="backdrop" @onclick="CloseAsync">
+    <div class="dialog" role="dialog" aria-label="Card" @onclick:stopPropagation="true">
+        @if (conflict is not null)
+        {
+            <div class="notice conflict" role="alert">@conflict</div>
+        }
+        else if (Latest is not null && Latest.Version != loadedVersion)
+        {
+            <div class="notice info" role="status">
+                Someone just changed this card. <button class="link-button" style="text-decoration:underline" @onclick="LoadLatest">Load their version</button>
+                (saving now would be rejected).
+            </div>
+        }
+
+        <div class="field">
+            <label class="caption" for="card-title">Title</label>
+            <input id="card-title" class="input" @bind="title" maxlength="200" disabled="@ReadOnly" />
+        </div>
+        <div class="field">
+            <label class="caption" for="card-description">Description</label>
+            <textarea id="card-description" class="input" @bind="description" maxlength="4000" disabled="@ReadOnly"
+                      placeholder="@(ReadOnly ? "" : "Add more detail…")"></textarea>
+        </div>
+        <div class="row2">
+            <div class="field">
+                <label class="caption" for="card-assignee">Assignee</label>
+                <select id="card-assignee" class="input" @bind="assigneeId" disabled="@ReadOnly">
+                    <option value="">Nobody</option>
+                    @foreach (var m in Members.Where(m => m.Role >= Role.Member))
+                    {
+                        <option value="@m.UserId">@m.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label class="caption" for="card-due">Due date</label>
+                <input id="card-due" type="date" class="input" @bind="due" disabled="@ReadOnly" />
+            </div>
+        </div>
+        <div class="field">
+            <span class="caption">Labels</span>
+            <div class="label-picker">
+                @foreach (var label in Ui.AllLabels)
+                {
+                    <button type="button" class="label @label @(labels.HasFlag(label) ? "on" : "")" title="@label"
+                            aria-pressed="@labels.HasFlag(label)" disabled="@ReadOnly" @onclick="() => labels ^= label"></button>
+                }
+            </div>
+        </div>
+        <p class="muted" style="font-size:12px">Last changed @Ui.Ago(Card.UpdatedAt, DateTimeOffset.UtcNow) · version @loadedVersion</p>
+
+        <div class="actions">
+            @if (!ReadOnly)
+            {
+                <button class="button danger small" @onclick="DeleteAsync">Delete card</button>
+            }
+            else
+            {
+                <span></span>
+            }
+            <div style="display:flex;gap:8px">
+                <button class="button secondary" @onclick="CloseAsync">@(ReadOnly ? "Close" : "Cancel")</button>
+                @if (!ReadOnly)
+                {
+                    <button class="button" @onclick="SaveAsync" disabled="@saving">Save</button>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public CardView Card { get; set; } = default!;
+
+    /// <summary>The card as it is on the board right now (updated live while the editor is open).</summary>
+    [Parameter] public CardView? Latest { get; set; }
+
+    [Parameter, EditorRequired] public IReadOnlyList<MemberView> Members { get; set; } = [];
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter, EditorRequired] public string UserId { get; set; } = "";
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private Guid cardId;
+    private int loadedVersion;
+    private string title = "";
+    private string description = "";
+    private string assigneeId = "";
+    private DateOnly? due;
+    private Labels labels;
+    private string? conflict;
+    private bool saving;
+
+    protected override void OnParametersSet()
+    {
+        if (Card.Id != cardId)
+        {
+            Load(Card);
+        }
+    }
+
+    private void Load(CardView card)
+    {
+        cardId = card.Id;
+        loadedVersion = card.Version;
+        title = card.Title;
+        description = card.Description;
+        assigneeId = card.Assignee?.Id ?? "";
+        due = card.DueDate;
+        labels = card.Labels;
+    }
+
+    private void LoadLatest()
+    {
+        if (Latest is not null)
+        {
+            Load(Latest);
+            conflict = null;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        var edit = new CardEdit(
+            Title: title,
+            Description: description,
+            AssigneeId: assigneeId.Length > 0 ? assigneeId : null,
+            ClearAssignee: assigneeId.Length == 0,
+            DueDate: due,
+            ClearDueDate: due is null,
+            Labels: labels);
+        var result = await Boards.UpdateCardAsync(UserId, cardId, loadedVersion, edit);
+        saving = false;
+        if (result.IsOk)
+        {
+            await OnClose.InvokeAsync();
+        }
+        else if (result.Status == ResultStatus.Conflict)
+        {
+            // Keep the user's text on screen, but tell them what happened; they can load the new version.
+            conflict = result.Error;
+        }
+        else
+        {
+            conflict = result.Error;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        var result = await Boards.DeleteCardAsync(UserId, cardId);
+        if (result.IsOk)
+        {
+            await OnClose.InvokeAsync();
+        }
+        else
+        {
+            conflict = result.Error;
+        }
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+}

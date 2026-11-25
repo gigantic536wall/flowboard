@@ -31,6 +31,12 @@ public sealed class Workspace
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
     public required string Name { get; set; }
+
+    /// <summary>Secret part of the invite link (/join/{code}); null when invites are switched off.</summary>
+    public string? InviteCode { get; set; }
+
+    /// <summary>Created by the demo; removed with its guests after a day.</summary>
+    public bool IsDemo { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public List<Membership> Members { get; } = [];
     public List<Board> Boards { get; } = [];

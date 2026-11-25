@@ -21,6 +21,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IBoardEvents, NoBoardEvents>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<BoardService>();
+        services.AddScoped<DemoService>();
 
         return services.AddIdentityCore<ApplicationUser>(options =>
             {

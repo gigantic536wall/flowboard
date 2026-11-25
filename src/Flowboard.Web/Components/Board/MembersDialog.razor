@@ -1,0 +1,156 @@
+@inject BoardService Boards
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<div class="backdrop" @onclick="Close">
+    <div class="dialog" role="dialog" aria-label="Members" @onclick:stopPropagation="true">
+        <h2>Members of @Board.WorkspaceName</h2>
+        @if (error is not null)
+        {
+            <div class="notice conflict" role="alert">@error</div>
+        }
+        <ul class="members">
+            @foreach (var m in members)
+            {
+                <li>
+                    <span class="avatar small" style="background:@Ui.ColorFor(m.UserId)">@Ui.Initials(m.Name)</span>
+                    <span class="grow">@m.Name@(m.UserId == UserId ? " (you)" : "") <span class="muted">@m.Email</span></span>
+                    @if (IsOwner && m.UserId != UserId)
+                    {
+                        <select class="input" value="@m.Role" aria-label="Role of @m.Name" @onchange="e => ChangeRoleAsync(m, e)">
+                            <option value="@Role.Owner">Owner</option>
+                            <option value="@Role.Member">Member</option>
+                            <option value="@Role.Viewer">Viewer</option>
+                        </select>
+                        <button class="link-button" title="Remove @m.Name" @onclick="() => RemoveAsync(m.UserId)">Remove</button>
+                    }
+                    else
+                    {
+                        <span class="role-pill">@Ui.RoleName(m.Role)</span>
+                    }
+                </li>
+            }
+        </ul>
+
+        @if (IsOwner)
+        {
+            <form class="inline-form" @onsubmit="AddAsync">
+                <input class="input" type="email" placeholder="colleague@company.com" @bind="email" aria-label="Email of the person to add" />
+                <select class="input" style="width:auto" @bind="role" aria-label="Role">
+                    <option value="@Role.Member">Member</option>
+                    <option value="@Role.Viewer">Viewer</option>
+                    <option value="@Role.Owner">Owner</option>
+                </select>
+                <button class="button" type="submit">Add</button>
+            </form>
+            <p class="muted" style="font-size:13px;margin-top:8px">People need a Flowboard account first. Members edit cards, viewers only watch.</p>
+            <div class="field" style="margin-top:16px">
+                <span class="caption">Invite link</span>
+                @if (invite is null)
+                {
+                    <button class="button secondary small" @onclick="CreateInviteAsync">Create an invite link</button>
+                }
+                else
+                {
+                    <div class="inline-form">
+                        <input class="input" readonly value="@InviteUrl" aria-label="Invite link" />
+                        <button class="button secondary small" @onclick="CopyInviteAsync">@(copied ? "Copied" : "Copy")</button>
+                        <button class="link-button" @onclick="RevokeInviteAsync">Turn off</button>
+                    </div>
+                    <p class="muted" style="font-size:13px;margin-top:6px">Anyone with this link who signs in joins as a member.</p>
+                }
+            </div>
+        }
+
+        <div class="actions">
+            <button class="button secondary small" @onclick="LeaveAsync">Leave workspace</button>
+            <button class="button" @onclick="Close">Done</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public BoardView Board { get; set; } = default!;
+    [Parameter, EditorRequired] public string UserId { get; set; } = "";
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private IReadOnlyList<MemberView> members = [];
+    private string email = "";
+    private Role role = Role.Member;
+    private string? error;
+
+    private bool IsOwner => Board.MyRole == Role.Owner;
+    private string? invite;
+    private bool copied;
+    private string InviteUrl => $"{Navigation.BaseUri}join/{invite}";
+
+    private async Task CreateInviteAsync()
+    {
+        var result = await Boards.GetOrCreateInviteAsync(UserId, Board.WorkspaceId);
+        invite = result.Value;
+        error = result.Error;
+    }
+
+    private async Task CopyInviteAsync()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", InviteUrl);
+        copied = true;
+    }
+
+    private async Task RevokeInviteAsync()
+    {
+        var result = await Boards.RevokeInviteAsync(UserId, Board.WorkspaceId);
+        error = result.Error;
+        if (result.IsOk)
+        {
+            invite = null;
+        }
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => members = await Boards.GetMembersAsync(UserId, Board.WorkspaceId);
+
+    private async Task AddAsync()
+    {
+        var result = await Boards.AddMemberAsync(UserId, Board.WorkspaceId, email, role);
+        error = result.Error;
+        if (result.IsOk)
+        {
+            email = "";
+            await LoadAsync();
+        }
+    }
+
+    private async Task ChangeRoleAsync(MemberView member, ChangeEventArgs e)
+    {
+        if (Enum.TryParse<Role>(e.Value?.ToString(), out var newRole))
+        {
+            var result = await Boards.ChangeRoleAsync(UserId, Board.WorkspaceId, member.UserId, newRole);
+            error = result.Error;
+            await LoadAsync();
+        }
+    }
+
+    private async Task RemoveAsync(string memberId)
+    {
+        var result = await Boards.RemoveMemberAsync(UserId, Board.WorkspaceId, memberId);
+        error = result.Error;
+        await LoadAsync();
+    }
+
+    private async Task LeaveAsync()
+    {
+        var result = await Boards.RemoveMemberAsync(UserId, Board.WorkspaceId, UserId);
+        if (result.IsOk)
+        {
+            Navigation.NavigateTo("");
+        }
+        else
+        {
+            error = result.Error;
+        }
+    }
+
+    private Task Close() => OnClose.InvokeAsync();
+}

@@ -29,7 +29,9 @@ public sealed class BoardService(IDbContextFactory<FlowboardDbContext> factory, 
         }
 
         await using var db = await factory.CreateDbContextAsync(ct);
-        var workspace = new Workspace { Name = clean };
+        // Guests' workspaces are demo data too, so they disappear together with the guest.
+        var isDemo = await db.Users.Where(u => u.Id == actorId).Select(u => u.IsDemo).SingleOrDefaultAsync(ct);
+        var workspace = new Workspace { Name = clean, IsDemo = isDemo };
         workspace.Members.Add(new Membership { UserId = actorId, Role = Role.Owner });
         db.Workspaces.Add(workspace);
         await db.SaveChangesAsync(ct);
@@ -140,7 +142,8 @@ public sealed class BoardService(IDbContextFactory<FlowboardDbContext> factory, 
         }
 
         var role = (await RoleInAsync(db, actorId, board.WorkspaceId, ct))!.Value;
-        var workspaceName = await db.Workspaces.Where(w => w.Id == board.WorkspaceId).Select(w => w.Name).SingleAsync(ct);
+        var workspace = await db.Workspaces.AsNoTracking().Where(w => w.Id == board.WorkspaceId)
+            .Select(w => new { w.Name, w.IsDemo, w.InviteCode }).SingleAsync(ct);
         var columns = await db.Columns.AsNoTracking().Where(c => c.BoardId == boardId).ToListAsync(ct);
         var cards = await db.Cards.AsNoTracking().Where(c => c.BoardId == boardId)
             .Select(c => new CardView(c.Id, c.ColumnId, c.Title, c.Description, c.Rank,
@@ -155,7 +158,8 @@ public sealed class BoardService(IDbContextFactory<FlowboardDbContext> factory, 
             .Select(c => new ColumnView(c.Id, c.Name, c.Rank, c.WipLimit,
                 [.. byColumn[c.Id].OrderBy(card => card.Rank, StringComparer.Ordinal)]))
             .ToList();
-        return Result<BoardView>.Ok(new BoardView(board.Id, board.WorkspaceId, board.Name, workspaceName, role, columnViews, members));
+        return Result<BoardView>.Ok(new BoardView(board.Id, board.WorkspaceId, board.Name, workspace.Name, role, columnViews, members,
+            workspace.IsDemo ? workspace.InviteCode : null));
     }
 
     public async Task<Result<IReadOnlyList<ActivityView>>> GetActivityAsync(string actorId, Guid boardId, int take = 50, CancellationToken ct = default)
@@ -556,6 +560,69 @@ public sealed class BoardService(IDbContextFactory<FlowboardDbContext> factory, 
         await LogForWorkspaceAsync(db, workspaceId, actorId, ActivityKind.MemberRemoved, $"removed {membership.User!.DisplayName}", ct);
         return Result<Done>.Ok(default);
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // Invite links
+
+    /// <summary>The workspace's invite code, created on first use. Owners only.</summary>
+    public async Task<Result<string>> GetOrCreateInviteAsync(string actorId, Guid workspaceId, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        if (await OwnerCheckAsync(db, actorId, workspaceId, ct) is { } failure)
+        {
+            return failure;
+        }
+
+        var workspace = await db.Workspaces.SingleAsync(w => w.Id == workspaceId, ct);
+        workspace.InviteCode ??= NewInviteCode();
+        await db.SaveChangesAsync(ct);
+        return Result<string>.Ok(workspace.InviteCode);
+    }
+
+    /// <summary>Switches the invite link off; a new one can be created later.</summary>
+    public async Task<Result<Done>> RevokeInviteAsync(string actorId, Guid workspaceId, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        if (await OwnerCheckAsync(db, actorId, workspaceId, ct) is { } failure)
+        {
+            return failure;
+        }
+
+        await db.Workspaces.Where(w => w.Id == workspaceId).ExecuteUpdateAsync(s => s.SetProperty(w => w.InviteCode, (string?)null), ct);
+        return Result<Done>.Ok(default);
+    }
+
+    /// <summary>Joins the workspace behind an invite code as a member (or does nothing if already in it).</summary>
+    /// <returns>The first board of the workspace, if it has one.</returns>
+    public async Task<Result<Guid?>> JoinByInviteAsync(string actorId, string code, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var workspace = string.IsNullOrWhiteSpace(code) ? null : await db.Workspaces.SingleOrDefaultAsync(w => w.InviteCode == code, ct);
+        if (workspace is null)
+        {
+            return new Failure(ResultStatus.NotFound, "This invite link is not valid anymore. Ask for a new one.");
+        }
+
+        if (!await db.Memberships.AnyAsync(m => m.WorkspaceId == workspace.Id && m.UserId == actorId, ct))
+        {
+            db.Memberships.Add(new Membership { WorkspaceId = workspace.Id, UserId = actorId, Role = Role.Member });
+            await db.SaveChangesAsync(ct);
+            await LogForWorkspaceAsync(db, workspace.Id, actorId, ActivityKind.MemberAdded, "joined the workspace via the invite link", ct);
+        }
+
+        var firstBoard = await db.Boards.Where(b => b.WorkspaceId == workspace.Id).OrderBy(b => b.CreatedAt).Select(b => (Guid?)b.Id).FirstOrDefaultAsync(ct);
+        return Result<Guid?>.Ok(firstBoard);
+    }
+
+    /// <summary>Whether the invite belongs to a demo workspace (then visitors may join as guests without an account).</summary>
+    public async Task<bool> IsDemoInviteAsync(string code, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Workspaces.AnyAsync(w => w.InviteCode == code && w.IsDemo, ct);
+    }
+
+    private static string NewInviteCode() =>
+        Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(12)).Replace('+', '-').Replace('/', '_');
 
     // ---------------------------------------------------------------------------------------------
     // Helpers

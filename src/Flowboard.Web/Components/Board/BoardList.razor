@@ -1,0 +1,101 @@
+@inject BoardService Boards
+@inject NavigationManager Navigation
+
+<div class="page-head">
+    <h1>Your boards</h1>
+    <form class="inline-form" @onsubmit="CreateWorkspace">
+        <input class="input" placeholder="New workspace name" @bind="newWorkspace" maxlength="100" aria-label="New workspace name" />
+        <button class="button secondary" type="submit">Add workspace</button>
+    </form>
+</div>
+
+@if (error is not null)
+{
+    <p class="error">@error</p>
+}
+
+@if (workspaces is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (workspaces.Count == 0)
+{
+    <p class="notice info">Create a workspace for your team to get started.</p>
+}
+else
+{
+    @foreach (var ws in workspaces)
+    {
+        <section class="workspace">
+            <h2>
+                @ws.Name
+                <span class="role-pill">@Ui.RoleName(ws.MyRole)</span>
+                <span class="muted">@ws.MemberCount @(ws.MemberCount == 1 ? "member" : "members")</span>
+            </h2>
+            <div class="board-grid">
+                @foreach (var board in boards.Where(b => b.WorkspaceId == ws.Id))
+                {
+                    <a class="board-tile" href="boards/@board.Id">
+                        <strong>@board.Name</strong>
+                        <small>@board.CardCount @(board.CardCount == 1 ? "card" : "cards")</small>
+                    </a>
+                }
+                @if (ws.MyRole >= Role.Member)
+                {
+                    <form class="new-board" @onsubmit="() => CreateBoard(ws.Id)">
+                        <input class="input" placeholder="New board" @bind="newBoard[ws.Id]" maxlength="100" aria-label="New board name" />
+                        <button class="button small" type="submit">Add</button>
+                    </form>
+                }
+            </div>
+        </section>
+    }
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string userId = "";
+    private List<WorkspaceSummary>? workspaces;
+    private List<BoardSummary> boards = [];
+    private readonly Dictionary<Guid, string> newBoard = [];
+    private string newWorkspace = "";
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        userId = Ui.UserId((await AuthState).User);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        workspaces = [.. await Boards.ListWorkspacesAsync(userId)];
+        boards = [.. await Boards.ListBoardsAsync(userId)];
+        foreach (var ws in workspaces)
+        {
+            newBoard.TryAdd(ws.Id, "");
+        }
+    }
+
+    private async Task CreateWorkspace()
+    {
+        var result = await Boards.CreateWorkspaceAsync(userId, newWorkspace);
+        error = result.Error;
+        if (result.IsOk)
+        {
+            newWorkspace = "";
+            await LoadAsync();
+        }
+    }
+
+    private async Task CreateBoard(Guid workspaceId)
+    {
+        var result = await Boards.CreateBoardAsync(userId, workspaceId, newBoard[workspaceId]);
+        error = result.Error;
+        if (result.IsOk)
+        {
+            Navigation.NavigateTo($"boards/{result.Value}");
+        }
+    }
+}

@@ -1,0 +1,23 @@
+@if (Items.Count == 0)
+{
+    <p class="muted">Nothing has happened here yet.</p>
+}
+else
+{
+    <ul class="activity">
+        @foreach (var item in Items)
+        {
+            <li>
+                <span class="avatar small" style="background:@Ui.ColorFor(item.ActorName)">@Ui.Initials(item.ActorName)</span>
+                <div>
+                    <strong>@item.ActorName</strong> @item.Text
+                    <time datetime="@item.At.ToString("O", System.Globalization.CultureInfo.InvariantCulture)">@Ui.Ago(item.At, DateTimeOffset.UtcNow)</time>
+                </div>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ActivityView> Items { get; set; } = [];
+}

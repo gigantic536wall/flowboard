@@ -22,6 +22,8 @@ public sealed class FlowboardDbContext(DbContextOptions<FlowboardDbContext> opti
         builder.Entity<Workspace>(e =>
         {
             e.Property(w => w.Name).HasMaxLength(100);
+            e.Property(w => w.InviteCode).HasMaxLength(32);
+            e.HasIndex(w => w.InviteCode).IsUnique();
             e.HasMany(w => w.Members).WithOne().HasForeignKey(m => m.WorkspaceId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(w => w.Boards).WithOne(b => b.Workspace).HasForeignKey(b => b.WorkspaceId).OnDelete(DeleteBehavior.Cascade);
         });

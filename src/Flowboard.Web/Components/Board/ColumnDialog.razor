@@ -1,0 +1,82 @@
+@inject BoardService Boards
+
+<div class="backdrop" @onclick="Close">
+    <form class="dialog" role="dialog" aria-label="Column" @onclick:stopPropagation="true" @onsubmit="SaveAsync">
+        <h2>Column</h2>
+        @if (error is not null)
+        {
+            <div class="notice conflict" role="alert">@error</div>
+        }
+        <div class="row2">
+            <div class="field">
+                <label class="caption" for="column-name">Name</label>
+                <input id="column-name" class="input" @bind="name" maxlength="60" />
+            </div>
+            <div class="field">
+                <label class="caption" for="column-limit">Card limit (optional)</label>
+                <input id="column-limit" class="input" type="number" min="1" max="999" @bind="limit" placeholder="No limit" />
+            </div>
+        </div>
+        <p class="muted" style="font-size:13px">A limit keeps work in progress small: the counter turns red when the column holds more cards.</p>
+        <div class="actions">
+            <button type="button" class="button danger small" @onclick="DeleteAsync">
+                @(confirmDelete ? $"Really delete with {Column.Cards.Count} cards?" : "Delete column")
+            </button>
+            <div style="display:flex;gap:8px">
+                <button type="button" class="button secondary" @onclick="Close">Cancel</button>
+                <button type="submit" class="button">Save</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ColumnView Column { get; set; } = default!;
+    [Parameter, EditorRequired] public string UserId { get; set; } = "";
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string name = "";
+    private int? limit;
+    private string? error;
+    private bool confirmDelete;
+
+    protected override void OnInitialized()
+    {
+        name = Column.Name;
+        limit = Column.WipLimit;
+    }
+
+    private async Task SaveAsync()
+    {
+        var result = await Boards.UpdateColumnAsync(UserId, Column.Id, name, limit);
+        if (result.IsOk)
+        {
+            await OnClose.InvokeAsync();
+        }
+        else
+        {
+            error = result.Error;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (!confirmDelete && Column.Cards.Count > 0)
+        {
+            confirmDelete = true;
+            return;
+        }
+
+        var result = await Boards.DeleteColumnAsync(UserId, Column.Id);
+        if (result.IsOk)
+        {
+            await OnClose.InvokeAsync();
+        }
+        else
+        {
+            error = result.Error;
+        }
+    }
+
+    private Task Close() => OnClose.InvokeAsync();
+}

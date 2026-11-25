@@ -1,0 +1,410 @@
+@page "/boards/{BoardId:guid}"
+@attribute [Authorize]
+@implements IAsyncDisposable
+@inject BoardService Boards
+@inject BoardBroadcaster Broadcaster
+@inject PresenceTracker Presence
+@inject TimeProvider Clock
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>@(board?.Name ?? "Board") · Flowboard</PageTitle>
+
+@if (loadError is not null)
+{
+    <div class="hero">
+        <h1>Board not available</h1>
+        <p>@loadError</p>
+        <a class="button" href="">Back to your boards</a>
+    </div>
+}
+else if (board is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="board-head">
+        <a class="crumb" href="">@board.WorkspaceName</a>
+        <span class="muted">/</span>
+        <h1>@board.Name</h1>
+        <span class="role-pill" title="Your role in this workspace">@Ui.RoleName(board.MyRole)</span>
+        <span class="spacer"></span>
+        <div class="presence" aria-label="People on this board">
+            @foreach (var viewer in viewers)
+            {
+                <span class="avatar" style="background:@Ui.ColorFor(viewer.UserId)" title="@(viewer.Name + (viewer.UserId == userId ? " (you)" : "") + " is here")">@Ui.Initials(viewer.Name)</span>
+            }
+        </div>
+        <button class="button secondary small" @onclick="() => showMembers = !showMembers">Members</button>
+        <button class="button secondary small" @onclick="ToggleHistory">History</button>
+    </div>
+
+    @if (board.DemoInviteCode is { } inviteCode)
+    {
+        <div class="notice info demo-hint">
+            <strong>This is a demo board.</strong> To see the live updates, open
+            <a href="@($"join/{inviteCode}")" target="_blank">this invite link</a> in another browser or on your phone
+            (it joins as a second guest), then move a card here.
+            <button class="link-button" style="text-decoration:underline" @onclick="() => CopyInviteAsync(inviteCode)">Copy link</button>
+        </div>
+    }
+
+    @if (ReadOnly)
+    {
+        <p class="notice info">You are a viewer on this board: you see every change live, but cannot edit.</p>
+    }
+
+    <div class="board">
+        @foreach (var column in board.Columns)
+        {
+            var count = column.Cards.Count;
+            <section class="column" data-column="@column.Name"
+                     @ondragover:preventDefault="true" @ondrop="() => DropAsync(column.Id, null)">
+                <header class="column-head">
+                    <h2 @onclick="() => OpenColumn(column)" title="@(ReadOnly ? column.Name : "Rename, set a limit or delete")">@column.Name</h2>
+                    <span class="count @(column.OverLimit ? "over" : "")" title="@(column.WipLimit is null ? "" : $"Limit: {column.WipLimit}")">
+                        @count@(column.WipLimit is { } limit ? $" / {limit}" : "")
+                    </span>
+                </header>
+                <div class="cards">
+                    @foreach (var card in column.Cards)
+                    {
+                        var editor = viewers.FirstOrDefault(v => v.EditingCardId == card.Id && v.UserId != userId);
+                        <article class="card-tile @(dragged == card.Id ? "dragging" : "") @(dropBefore == card.Id ? "drop-before" : "")"
+                                 draggable="@(ReadOnly ? "false" : "true")" data-card="@card.Title"
+                                 @ondragstart="() => dragged = card.Id" @ondragend="() => { dragged = null; dropBefore = null; }"
+                                 @ondragenter="() => dropBefore = card.Id"
+                                 @ondragover:preventDefault="true" @ondrop="() => DropAsync(column.Id, card.Id)" @ondrop:stopPropagation="true"
+                                 @onclick="() => OpenCard(card)">
+                            @if (editor is not null)
+                            {
+                                <span class="editing">@editor.Name is editing</span>
+                            }
+                            @if (card.Labels != Labels.None)
+                            {
+                                <div class="labels">
+                                    @foreach (var label in Ui.Split(card.Labels))
+                                    {
+                                        <span class="label @label" title="@label"></span>
+                                    }
+                                </div>
+                            }
+                            <div class="title">@card.Title</div>
+                            @if (card.DueDate is not null || card.Assignee is not null || card.Description.Length > 0)
+                            {
+                                <div class="meta">
+                                    @if (card.DueDate is { } due)
+                                    {
+                                        <span class="due @(due < Today ? "overdue" : "")">📅 @due.ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture)</span>
+                                    }
+                                    @if (card.Description.Length > 0)
+                                    {
+                                        <span title="Has a description">≡</span>
+                                    }
+                                    @if (card.Assignee is { } a)
+                                    {
+                                        <span class="avatar small" title="@a.Name" style="margin-left:auto;background:@Ui.ColorFor(a.Id)">@Ui.Initials(a.Name)</span>
+                                    }
+                                </div>
+                            }
+                        </article>
+                    }
+                    @if (!ReadOnly)
+                    {
+                        <div class="drop-end @(dragged is not null && dropEnd == column.Id ? "active" : "")"
+                             @ondragenter="() => { dropEnd = column.Id; dropBefore = null; }"
+                             @ondragover:preventDefault="true" @ondrop="() => DropAsync(column.Id, null)" @ondrop:stopPropagation="true"></div>
+                    }
+                </div>
+                @if (!ReadOnly)
+                {
+                    <footer class="column-foot">
+                        @if (addingTo == column.Id)
+                        {
+                            <form @onsubmit="() => AddCardAsync(column.Id)">
+                                <input class="input" placeholder="Card title" @bind="newCard" maxlength="200" aria-label="Card title" autofocus />
+                                <div style="display:flex;gap:6px;margin-top:6px">
+                                    <button class="button small" type="submit">Add card</button>
+                                    <button class="button secondary small" type="button" @onclick="() => addingTo = null">Cancel</button>
+                                </div>
+                            </form>
+                        }
+                        else
+                        {
+                            <button class="add-card" @onclick="() => StartAdding(column.Id)">+ Add a card</button>
+                        }
+                    </footer>
+                }
+            </section>
+        }
+        @if (!ReadOnly)
+        {
+            <form class="add-column" @onsubmit="AddColumnAsync">
+                <input class="input" placeholder="+ Add a column" @bind="newColumn" maxlength="60" aria-label="New column name" />
+            </form>
+        }
+    </div>
+
+    @if (showHistory)
+    {
+        <aside class="panel" aria-label="History">
+            <h2>History <button class="link-button" @onclick="ToggleHistory">✕</button></h2>
+            <ActivityList Items="activity" />
+        </aside>
+    }
+
+    @if (showMembers)
+    {
+        <MembersDialog Board="board" UserId="@userId" OnClose="CloseMembersAsync" />
+    }
+
+    @if (editing is not null)
+    {
+        <CardEditor Card="editing" Latest="LatestOf(editing.Id)" Members="board.Members" ReadOnly="ReadOnly"
+                    UserId="@userId" OnClose="CloseCardAsync" />
+    }
+
+    @if (editingColumn is not null)
+    {
+        <ColumnDialog Column="editingColumn" UserId="@userId" OnClose="() => editingColumn = null" />
+    }
+}
+
+@if (toast is not null)
+{
+    <div class="toast" role="status">@toast</div>
+}
+
+@code {
+    [Parameter] public Guid BoardId { get; set; }
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private readonly Guid session = Guid.NewGuid();
+    private string userId = "";
+    private BoardView? board;
+    private string? loadError;
+    private IReadOnlyList<Viewer> viewers = [];
+    private IReadOnlyList<ActivityView> activity = [];
+    private IDisposable? subscription;
+    private bool joined;
+
+    private Guid? dragged;
+    private Guid? dropBefore;
+    private Guid? dropEnd;
+    private Guid? addingTo;
+    private string newCard = "";
+    private string newColumn = "";
+    private bool showHistory;
+    private bool showMembers;
+    private CardView? editing;
+    private ColumnView? editingColumn;
+    private string? toast;
+    private CancellationTokenSource? toastTimer;
+
+    private bool ReadOnly => board?.MyRole < Role.Member;
+    private DateOnly Today => DateOnly.FromDateTime(Clock.GetLocalNow().DateTime);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var user = (await AuthState).User;
+        userId = Ui.UserId(user);
+        if (!await ReloadAsync())
+        {
+            return;
+        }
+
+        if (!joined)
+        {
+            joined = true;
+            subscription = Broadcaster.Subscribe(BoardId, OnBoardChangedAsync);
+            Presence.Changed += OnPresenceChangedAsync;
+            await Presence.JoinAsync(BoardId, session, userId, Ui.DisplayName(user));
+        }
+    }
+
+    private async Task<bool> ReloadAsync()
+    {
+        var result = await Boards.GetBoardAsync(userId, BoardId);
+        if (!result.IsOk)
+        {
+            loadError = result.Status == ResultStatus.NotFound
+                ? "This board does not exist, or you are not a member of its workspace."
+                : result.Error;
+            board = null;
+            return false;
+        }
+
+        board = result.Value;
+        viewers = Presence.ViewersOf(BoardId);
+        if (showHistory)
+        {
+            activity = (await Boards.GetActivityAsync(userId, BoardId)).Value ?? [];
+        }
+
+        return true;
+    }
+
+    /// <summary>Someone (maybe in another tab, maybe a colleague) changed the board: redraw it.</summary>
+    private Task OnBoardChangedAsync(BoardChange change) => InvokeAsync(async () =>
+    {
+        await ReloadAsync();
+        if (change.ActorId != userId)
+        {
+            ShowToast($"{change.ActorName} {change.Text}");
+        }
+
+        StateHasChanged();
+    });
+
+    private Task OnPresenceChangedAsync(Guid boardId) => boardId != BoardId ? Task.CompletedTask : InvokeAsync(() =>
+    {
+        viewers = Presence.ViewersOf(BoardId);
+        StateHasChanged();
+    });
+
+    private CardView? LatestOf(Guid cardId) => board?.Columns.SelectMany(c => c.Cards).FirstOrDefault(c => c.Id == cardId);
+
+    private async Task DropAsync(Guid columnId, Guid? beforeCardId)
+    {
+        if (dragged is not { } cardId || board is null || ReadOnly)
+        {
+            return;
+        }
+
+        dragged = null;
+        dropBefore = null;
+        dropEnd = null;
+        var column = board.Columns.First(c => c.Id == columnId);
+        var others = column.Cards.Where(c => c.Id != cardId).ToList();
+        var index = beforeCardId is { } before ? others.FindIndex(c => c.Id == before) : others.Count;
+        if (index < 0)
+        {
+            index = others.Count;
+        }
+
+        // Show the move at once; the server confirms it (or the reload puts the card back).
+        var moving = board.Columns.SelectMany(c => c.Cards).First(c => c.Id == cardId);
+        others.Insert(index, moving with { ColumnId = columnId });
+        board = board with
+        {
+            Columns = [.. board.Columns.Select(c => c.Id == columnId
+                ? c with { Cards = others }
+                : c with { Cards = [.. c.Cards.Where(x => x.Id != cardId)] })],
+        };
+
+        var result = await Boards.MoveCardAsync(userId, cardId, columnId, index);
+        if (!result.IsOk)
+        {
+            ShowToast(result.Error ?? "The card could not be moved.");
+            await ReloadAsync();
+        }
+    }
+
+    private void StartAdding(Guid columnId)
+    {
+        addingTo = columnId;
+        newCard = "";
+    }
+
+    private async Task AddCardAsync(Guid columnId)
+    {
+        var result = await Boards.AddCardAsync(userId, columnId, newCard);
+        if (result.IsOk)
+        {
+            newCard = "";
+        }
+        else
+        {
+            ShowToast(result.Error!);
+        }
+    }
+
+    private async Task AddColumnAsync()
+    {
+        var result = await Boards.AddColumnAsync(userId, BoardId, newColumn);
+        if (result.IsOk)
+        {
+            newColumn = "";
+        }
+        else
+        {
+            ShowToast(result.Error!);
+        }
+    }
+
+    private async Task OpenCard(CardView card)
+    {
+        if (dragged is not null)
+        {
+            return;
+        }
+
+        editing = card;
+        await Presence.SetEditingAsync(BoardId, session, ReadOnly ? null : card.Id);
+    }
+
+    private async Task CloseCardAsync()
+    {
+        editing = null;
+        await Presence.SetEditingAsync(BoardId, session, null);
+    }
+
+    private void OpenColumn(ColumnView column)
+    {
+        if (!ReadOnly)
+        {
+            editingColumn = column;
+        }
+    }
+
+    private async Task CloseMembersAsync()
+    {
+        showMembers = false;
+        await ReloadAsync();
+    }
+
+    private async Task ToggleHistory()
+    {
+        showHistory = !showHistory;
+        if (showHistory)
+        {
+            activity = (await Boards.GetActivityAsync(userId, BoardId)).Value ?? [];
+        }
+    }
+
+    private async Task CopyInviteAsync(string inviteCode)
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", $"{Navigation.BaseUri}join/{inviteCode}");
+        ShowToast("Link copied");
+    }
+
+    private void ShowToast(string message)
+    {
+        toast = message;
+        toastTimer?.Cancel();
+        toastTimer?.Dispose();
+        toastTimer = new CancellationTokenSource();
+        var token = toastTimer.Token;
+        _ = Task.Delay(TimeSpan.FromSeconds(4), token).ContinueWith(t =>
+        {
+            if (!t.IsCanceled)
+            {
+                _ = InvokeAsync(() => { toast = null; StateHasChanged(); });
+            }
+        }, TaskScheduler.Default);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        subscription?.Dispose();
+        Presence.Changed -= OnPresenceChangedAsync;
+        if (joined)
+        {
+            await Presence.LeaveAsync(BoardId, session);
+        }
+
+        toastTimer?.Cancel();
+        toastTimer?.Dispose();
+    }
+}

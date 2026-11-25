@@ -1,7 +1,38 @@
 ﻿@page "/"
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Flowboard</PageTitle>
 
-<h1>Hello, world!</h1>
-
-Welcome to your new app.
+<AuthorizeView>
+    <Authorized>
+        <BoardList />
+    </Authorized>
+    <NotAuthorized>
+        <section class="hero">
+            <h1>Your team's board, live.</h1>
+            <p>Plan work in columns and cards. When a colleague moves a card, it moves on your screen too:
+               no reloads, no "who changed this?".</p>
+            <div class="actions">
+                <a class="button" href="demo">Try it without signing up</a>
+                <a class="button secondary" href="Account/Register">Create an account</a>
+            </div>
+        </section>
+        <section class="features">
+            <div class="feature">
+                <h3>Real time</h3>
+                <p>Changes, people on the board and who is editing which card appear instantly.</p>
+            </div>
+            <div class="feature">
+                <h3>No lost work</h3>
+                <p>If two people edit the same card, nobody silently overwrites the other.</p>
+            </div>
+            <div class="feature">
+                <h3>Teams and roles</h3>
+                <p>Owners, members and read-only viewers per workspace.</p>
+            </div>
+            <div class="feature">
+                <h3>History</h3>
+                <p>Every change is recorded: who did what, and when.</p>
+            </div>
+        </section>
+    </NotAuthorized>
+</AuthorizeView>

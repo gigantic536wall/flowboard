@@ -1,23 +1,55 @@
 ﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager Navigation
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+<header class="topbar">
+    <a class="brand" href="">
+        <span class="brand-mark" aria-hidden="true"></span>
+        Flowboard
+    </a>
+    <nav class="topnav">
+        <AuthorizeView>
+            <Authorized>
+                <NavLink href="" Match="NavLinkMatch.All">Boards</NavLink>
+                <NavLink href="Account/Manage">@(context.User.FindFirst("display_name")?.Value ?? context.User.Identity?.Name)</NavLink>
+                <form action="Account/Logout" method="post" class="inline">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+                    <button type="submit" class="link-button">Sign out</button>
+                </form>
+            </Authorized>
+            <NotAuthorized>
+                <NavLink href="Account/Login">Sign in</NavLink>
+                <NavLink href="Account/Register" class="button small">Create account</NavLink>
+            </NotAuthorized>
+        </AuthorizeView>
+    </nav>
+</header>
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
-
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
-</div>
+<main class="main">
+    @Body
+</main>
 
 <div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
+    Something went wrong.
     <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
+    <span class="dismiss">✕</span>
 </div>
+
+@code {
+    private string? currentUrl;
+
+    protected override void OnInitialized()
+    {
+        currentUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        currentUrl = Navigation.ToBaseRelativePath(e.Location);
+        StateHasChanged();
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}
