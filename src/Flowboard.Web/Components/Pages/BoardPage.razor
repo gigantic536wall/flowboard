@@ -38,6 +38,10 @@ else
         </div>
         <button class="button secondary small" @onclick="() => showMembers = !showMembers">Members</button>
         <button class="button secondary small" @onclick="ToggleHistory">History</button>
+        @if (board.MyRole == Role.Owner)
+        {
+            <button class="button secondary small" @onclick="() => showSettings = true" title="Rename or delete the board">⚙</button>
+        }
     </div>
 
     @if (board.DemoInviteCode is { } inviteCode)
@@ -165,6 +169,11 @@ else
                     UserId="@userId" OnClose="CloseCardAsync" />
     }
 
+    @if (showSettings)
+    {
+        <BoardSettingsDialog Board="board" UserId="@userId" OnClose="() => showSettings = false" />
+    }
+
     @if (editingColumn is not null)
     {
         <ColumnDialog Column="editingColumn" UserId="@userId" OnClose="() => editingColumn = null" />
@@ -197,6 +206,7 @@ else
     private string newColumn = "";
     private bool showHistory;
     private bool showMembers;
+    private bool showSettings;
     private CardView? editing;
     private ColumnView? editingColumn;
     private string? toast;

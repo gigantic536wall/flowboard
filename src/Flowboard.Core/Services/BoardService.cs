@@ -129,6 +129,9 @@ public sealed class BoardService(IDbContextFactory<FlowboardDbContext> factory, 
 
         db.Boards.Remove(board);
         await db.SaveChangesAsync(ct);
+        // Not logged (the history goes with the board), but open pages must learn that it is gone.
+        var name = await db.Users.Where(u => u.Id == actorId).Select(u => u.DisplayName).SingleOrDefaultAsync(ct) ?? "Someone";
+        await events.PublishAsync(new BoardChange(boardId, ActivityKind.BoardDeleted, null, actorId, name, "deleted the board"), ct);
         return Result<Done>.Ok(default);
     }
 

@@ -8,6 +8,7 @@ namespace Flowboard.Web.Components.Board;
 public static class Ui
 {
     public const string DisplayNameClaim = "display_name";
+    public const string GuestClaim = "guest";
 
     private static readonly string[] Palette =
         ["#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#a855f7", "#14b8a6", "#f97316", "#64748b", "#ec4899"];

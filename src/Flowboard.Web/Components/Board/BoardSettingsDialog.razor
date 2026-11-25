@@ -1,0 +1,71 @@
+@inject BoardService Boards
+@inject NavigationManager Navigation
+
+<div class="backdrop" @onclick="Close">
+    <form class="dialog" role="dialog" aria-label="Board settings" @onclick:stopPropagation="true" @onsubmit="RenameAsync">
+        <h2>Board settings</h2>
+        @if (error is not null)
+        {
+            <div class="notice conflict" role="alert">@error</div>
+        }
+        <div class="field">
+            <label class="caption" for="board-name">Name</label>
+            <input id="board-name" class="input" @bind="name" maxlength="100" />
+        </div>
+        <div class="actions">
+            <button type="button" class="button danger small" @onclick="DeleteAsync">
+                @(confirmDelete ? "Delete board and all its cards?" : "Delete board")
+            </button>
+            <div style="display:flex;gap:8px">
+                <button type="button" class="button secondary" @onclick="Close">Cancel</button>
+                <button type="submit" class="button">Save</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public BoardView Board { get; set; } = default!;
+    [Parameter, EditorRequired] public string UserId { get; set; } = "";
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string name = "";
+    private string? error;
+    private bool confirmDelete;
+
+    protected override void OnInitialized() => name = Board.Name;
+
+    private async Task RenameAsync()
+    {
+        var result = await Boards.RenameBoardAsync(UserId, Board.Id, name);
+        if (result.IsOk)
+        {
+            await OnClose.InvokeAsync();
+        }
+        else
+        {
+            error = result.Error;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (!confirmDelete)
+        {
+            confirmDelete = true;
+            return;
+        }
+
+        var result = await Boards.DeleteBoardAsync(UserId, Board.Id);
+        if (result.IsOk)
+        {
+            Navigation.NavigateTo("");
+        }
+        else
+        {
+            error = result.Error;
+        }
+    }
+
+    private Task Close() => OnClose.InvokeAsync();
+}

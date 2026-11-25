@@ -15,6 +15,11 @@ public sealed class FlowboardClaimsFactory(UserManager<ApplicationUser> users, I
         ArgumentNullException.ThrowIfNull(user);
         var identity = await base.GenerateClaimsAsync(user);
         identity.AddClaim(new Claim(Ui.DisplayNameClaim, string.IsNullOrWhiteSpace(user.DisplayName) ? user.Email ?? user.UserName ?? "" : user.DisplayName));
+        if (user.IsDemo)
+        {
+            identity.AddClaim(new Claim(Ui.GuestClaim, "true"));
+        }
+
         return identity;
     }
 }

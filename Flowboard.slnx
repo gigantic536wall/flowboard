@@ -4,6 +4,7 @@
     <Project Path="src/Flowboard.Web/Flowboard.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Flowboard.E2E/Flowboard.E2E.csproj" />
     <Project Path="tests/Flowboard.Tests/Flowboard.Tests.csproj" />
   </Folder>
 </Solution>

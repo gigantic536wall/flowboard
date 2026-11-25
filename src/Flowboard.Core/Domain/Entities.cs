@@ -120,6 +120,7 @@ public enum ActivityKind
     MemberAdded,
     MemberRoleChanged,
     MemberRemoved,
+    BoardDeleted,
 }
 
 /// <summary>One line of a board's history: who did what, when.</summary>

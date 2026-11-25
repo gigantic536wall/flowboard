@@ -11,7 +11,15 @@
         <AuthorizeView>
             <Authorized>
                 <NavLink href="" Match="NavLinkMatch.All">Boards</NavLink>
-                <NavLink href="Account/Manage">@(context.User.FindFirst("display_name")?.Value ?? context.User.Identity?.Name)</NavLink>
+                @if (context.User.HasClaim(Ui.GuestClaim, "true"))
+                {
+                    <span class="role-pill" title="Demo guest: your boards are deleted after 24 hours, and signing out ends the demo">Guest</span>
+                    <span class="muted" style="font-size:14px">@Ui.DisplayName(context.User)</span>
+                }
+                else
+                {
+                    <NavLink href="Account/Manage">@Ui.DisplayName(context.User)</NavLink>
+                }
                 <form action="Account/Logout" method="post" class="inline">
                     <AntiforgeryToken />
                     <input type="hidden" name="ReturnUrl" value="@currentUrl" />
