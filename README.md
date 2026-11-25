@@ -5,8 +5,9 @@
 A Trello-style board written entirely in C#: Blazor for the interface, SignalR for live updates,
 PostgreSQL for storage. When a colleague moves a card, it moves on your screen too.
 
-**▶ Live demo:** LIVE_DEMO_LINK: press *Try it without signing up*, then open the invite link from the
+**▶ Live demo:** [flowboard-m68f.onrender.com](https://flowboard-m68f.onrender.com): press *Try it without signing up*, then open the invite link from the
 box at the top of the board in a second browser (or on your phone) and move a card.
+(Free hosting: the first request after a pause can take up to a minute.)
 
 <p align="center"><img src="docs/live-collaboration.gif" width="900" alt="Two browsers on the same board: a new card, a move, an 'is editing' badge and an edit conflict appear live on the other side"></p>
 <p align="center"><sub>Recorded by the end-to-end test: two separate browsers, two different guests, no reloads.</sub></p>
